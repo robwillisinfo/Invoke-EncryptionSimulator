@@ -56,7 +56,7 @@ C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulato
 
 Specify a target directory:  
 C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test"  
-C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -td "C:\User\User01\Desktop\Test"
+C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -td "C:\User\User01\Desktop\Test"  
 
 Fully loaded encrypt:  
 C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action "encrypt" -AesKey "cm9id2lsbGlzaW5mb2tleQ==" -AesIv "cm9id2lsbGlzaW5mb3xpdg==" -DeleteOriginal -LogLimit 5 -Unattended
