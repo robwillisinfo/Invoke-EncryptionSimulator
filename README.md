@@ -17,7 +17,7 @@ Built-in logging
 Invoke-EncryptionSimulator does not contain any sort of self propagation code, it is designed to be executed
 in a stand alone fashion.
 
-The following parameters are supported:
+The following parameters are supported:  
 -TargetDir (-td) - The directory containing the files to be encrypted/decrypted  
 -Action (-a) - Encrypt or decrypt the files, default = encrypt  
 -AesKey (-k) - The AES key to be used to encrypt the files, 16 bytes converted to b64, default = cm9id2lsbGlzaW5mb2tleQ== / robwillisinfokey  
