@@ -11,7 +11,7 @@ Author: Rob Willis (@b1t_r0t - robwillis.info)
 
 Invoke-EncryptionSimulator is designed to be a simple and safe way to emulate the encryption stage of a 
 ransomware deployment to aid in development and testing of controls focusing on file system level 
-changes rather than process related telemetry. No additional scripts or modules are neeeded, everything 
+changes rather than process related telemetry. No additional scripts or modules are needed, everything 
 needed to test is contained within this single script. Invoke-EncryptionSimulator was purposely built to 
 be as lean and clean as possible with the intent to look more like an administrative tool rather than 
 malware to hopefully avoid interference from security controls.
