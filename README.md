@@ -9,17 +9,18 @@ needed to test is contained within this single script. Invoke-EncryptionSimulato
 be as lean and clean as possible with the intent to look more like an administrative tool rather than 
 malware to hopefully avoid interference from security controls.
 
-Invoke-EncryptionSimulator has the following capabilities:
-Recursively encrypt or decrypt the contents of a specified folder (AES)
-Optionally delete the original file(s) after encryption
-Built-in logging
+Invoke-EncryptionSimulator has the following capabilities:  
+Recursively encrypt or decrypt the contents of a specified folder (AES)  
+Optionally delete the original file(s) after encryption  
+Optionally cleanup old encrypted/decrypted files  
+Built-in logging  
 
 Invoke-EncryptionSimulator does not contain any sort of self propagation code, it is designed to be executed
 in a stand alone fashion.
 
 The following parameters are supported:  
 -TargetDir (-td) - The directory containing the files to be encrypted/decrypted  
--Action (-a) - Encrypt or decrypt the files, default = encrypt  
+-Action (-a) - "Encrypt", "decrypt", or "cleanup", default = encrypt 
 -AesKey (-k) - The AES key to be used to encrypt the files, 16 bytes converted to b64, default = cm9id2lsbGlzaW5mb2tleQ== / robwillisinfokey  
 -AesIv (-i) - The initialization vector (IV) to be used for the AES encryption, 16 bytes converted to b64, default = cm9id2lsbGlzaW5mb2l2MQ== / robwillisinfoiv1  
 -DeleteOriginal - Destructive mode, will delete all of the original files after encryption  
@@ -47,6 +48,7 @@ The script will execute in the following order:
   - If the filename contains "encrypt" and not "decrypt and the action is decrypt - Decrypt the file
   - If the filename does not contain "encrypt" and does not contain "decrypt" and the action is encrypt - Encrypt the file
     - If the DeleteOriginal switch was specified, delete the original file
+  - If the action is cleanup, delete all the files ending with either .encrypted or .decrypted
 - Wrap up, stop logging
 
 # Examples
@@ -64,4 +66,6 @@ C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulato
 Fully loaded decrypt:  
 C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action "decrypt" -AesKey "cm9id2lsbGlzaW5mb2tleQ==" -AesIv "cm9id2lsbGlzaW5mb3xpdg==" -LogLimit 5 -Unattended
 
+Cleanup:
+C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action "cleanup"
 
