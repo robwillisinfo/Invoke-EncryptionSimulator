@@ -19,6 +19,7 @@ malware to hopefully avoid interference from security controls.
 Invoke-EncryptionSimulator has the following capabilities:
 Recursively encrypt or decrypt the contents of a specified folder (AES)
 Optionally delete the original file(s) after encryption
+Optionally cleanup old encrypted/decrypted files
 Built-in logging
 
 Invoke-EncryptionSimulator does not contain any sort of self propagation code, it is designed to be executed
@@ -26,9 +27,9 @@ in a stand alone fashion.
 
 The following parameters are supported:
 -TargetDir (-td) - The directory containing the files to be encrypted/decrypted
--Action (-a) - Encrypt or decrypt the files, default = encrypt
--AesKey (-k) - The AES key to be used to encrypt the files, 16 bytes converted to b64, default = cm9id2lsbGlzaW5mb2tleQ== / robwillisinfokey
--AesIv (-i) - The initialization vector (IV) to be used for the AES encryption, 16 bytes converted to b64, default = cm9id2lsbGlzaW5mb2l2MQ== / robwillisinfoiv1
+-Action (-a) - "Encrypt", "decrypt", or "cleanup", default = encrypt
+-AesKey (-k) - The AES key to be used to encrypt the files, 16 bytes converted to b64, default = dynamically generated at runtime
+-AesIv (-i) - The initialization vector (IV) to be used for the AES encryption, 16 bytes converted to b64, default = dynamically generated at runtime
 -DeleteOriginal - Destructive mode, will delete all of the original files after encryption
 -DisableLog - Disable the log file
 -LogLimit - Remove any old logs, keeping only the X most recent, default = 0/No limit
@@ -53,6 +54,7 @@ The script will execute in the following order:
   - If the filename contains "encrypt" and not "decrypt and the action is decrypt - Decrypt the file
   - If the filename does not contain "encrypt" and does not contain "decrypt" and the action is encrypt - Encrypt the file
     - If the DeleteOriginal switch was specified, delete the original file
+  - If the action is cleanup, delete all the files ending with either .encrypted or .decrypted
 - Wrap up, stop logging
 
 .EXAMPLE
@@ -69,6 +71,9 @@ C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulato
 
 Fully loaded decrypt:
 C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action "decrypt" -AesKey "cm9id2lsbGlzaW5mb2tleQ==" -AesIv "cm9id2lsbGlzaW5mb3xpdg==" -LogLimit 5 -Unattended
+
+Cleanup:
+C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action "cleanup"
 
 #>
 
@@ -89,6 +94,23 @@ function time {
 function targetDirStats {
     $global:fileStatsCount = (Get-ChildItem $targetDir -Recurse -Force -ErrorAction SilentlyContinue | Measure-Object).count
     $global:dirStatsCount = (Get-ChildItem $targetDir -Directory -Recurse -Force -ErrorAction SilentlyContinue | Measure-Object).count
+}
+
+function b64-encode($string) {
+    $bytes = [System.Text.Encoding]::ASCII.GetBytes($string)
+    $b64String =[Convert]::ToBase64String($bytes)
+    $b64String
+}
+
+function DeleteFilesByExtension($extensions) {
+    foreach ($Extension in $Extensions) {
+        $FilesToDelete = Get-ChildItem -Path $targetDir -Filter "*$Extension" -Recurse
+        
+        foreach ($File in $FilesToDelete) {
+            Write-Host "| Deleting - $($File.FullName)"
+            Remove-Item -Path $File.FullName -Force
+        }
+    }
 }
 
 function Encrypt-Decrypt-File($InputFilePath,$OutputFilePath,$Key,$IV,$Action) {
@@ -155,12 +177,12 @@ function Invoke-EncryptionSimulator {
         [Parameter(Mandatory = $false)]
         [Alias("k")]
         [String]
-        $aesKey = "cm9id2lsbGlzaW5mb2tleQ==",
+        $aesKey = $null,
 
         [Parameter(Mandatory = $false)]
         [Alias("i")]
         [String]
-        $aesIv = "cm9id2lsbGlzaW5mb2l2MQ==",
+        $aesIv = $null,
 
         [Parameter(Mandatory = $false)]
         [Alias("l")]
@@ -229,7 +251,6 @@ function Invoke-EncryptionSimulator {
     if (Test-Path -Path $targetDir) {
         "| Target directory exists: True"
         "|"
-        "+-------------------------------------------------------------------------------------"
     } else {
         "| Target directory exists: False"
         "|"
@@ -239,6 +260,26 @@ function Invoke-EncryptionSimulator {
         Pause
         Stop-Transcript
         exit
+    }
+    # Check to see if the key/iv are set and generate a pair if not
+    if ((-Not($aesKey)) -Or (-Not($aesIV))) {
+        try {
+            "| No key/iv specified, generating random pair..."
+            $randomKey = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 16 | % {[char]$_})
+            $randomIV = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 16 | % {[char]$_})
+            $aesKey = b64-encode($randomKey)
+            $aesIV = b64-encode($randomIV)
+            "|"
+            "+-------------------------------------------------------------------------------------"            
+        } catch {
+            "| Key generation failed!"
+            "| Error message: $_"
+            "|"
+            "+-------------------------------------------------------------------------------------"
+            Pause
+            Stop-Transcript
+            exit
+        }
     }
 
     # Gather the initial target directory stats
@@ -316,35 +357,47 @@ function Invoke-EncryptionSimulator {
         exit  
     }
     ""
-    "+-------------------------------------------------------------------------------------"
-    "| Beginning encryption/decryption..."
-    "+---------------------------------"
-    "|"
-    $actionCompleted = -join("$action","ed")
-    # Loop through each file in the directory
-    Get-ChildItem -Path $targetDir -File -Recurse | ForEach-Object {
-        # If the action is encrypt and the target filename already contians encrypt, skip it.
-        if ($_ -match "`.encrypted" -And $_ -notmatch "`.decrypted" -And $action -match "encrypt") {
-            "| Skipping, file appears to be encrypted - $_"
-            "|"
-        }
-        
-        if (($_ -match "`.encrypted" -And $_ -notmatch "`.decrypted" -And $action -match "decrypt") -Or ($_ -notmatch "`.encrypted" -And $_ -notmatch "`.decrypted" -And $action -match "encrypt")) {
-            # Construct output file path
-            $outputFilePath = -join($_.FullName,"`.$actionCompleted")
-            "| $action - $_ `> " + $_ + "`.$actionCompleted"
-            # Encrypt or decrypt each file
-            Try {
-                Encrypt-Decrypt-File -InputFilePath $_.FullName -OutputFilePath $outputFilePath -Key $aesKey -IV $aesIv -Action $action -DeleteOriginal $DeleteOriginal
+    ##########################################
+    if (($action -match "encrypt") -Or ($action -match "decrypt")) {
+        "+-------------------------------------------------------------------------------------"
+        "| Beginning encryption/decryption..."
+        "+---------------------------------"
+        "|"
+        $actionCompleted = -join("$action","ed")
+        # Loop through each file in the directory
+        Get-ChildItem -Path $targetDir -File -Recurse | ForEach-Object {
+            # If the action is encrypt and the target filename already contians encrypt, skip it.
+            if ($_ -match "`.encrypted" -And $_ -notmatch "`.decrypted" -And $action -match "encrypt") {
+                "| Skipping, file appears to be encrypted - $_"
                 "|"
             }
-            Catch {
-                "| Something went wrong!"
-                "| Error message: $_"
-                "|"
+            
+            if (($_ -match "`.encrypted" -And $_ -notmatch "`.decrypted" -And $action -match "decrypt") -Or ($_ -notmatch "`.encrypted" -And $_ -notmatch "`.decrypted" -And $action -match "encrypt")) {
+                # Construct output file path
+                $outputFilePath = -join($_.FullName,"`.$actionCompleted")
+                "| $action - $_ `> " + $_ + "`.$actionCompleted"
+                # Encrypt or decrypt each file
+                Try {
+                    Encrypt-Decrypt-File -InputFilePath $_.FullName -OutputFilePath $outputFilePath -Key $aesKey -IV $aesIv -Action $action -DeleteOriginal $DeleteOriginal
+                    "|"
+                }
+                Catch {
+                    "| Something went wrong!"
+                    "| Error message: $_"
+                    "|"
+                }
             }
         }
     }
+    if ($action -match "cleanup"){
+        "+-------------------------------------------------------------------------------------"
+        "| Beginning cleanup..."
+        "+---------------------------------"
+        "|"  
+        DeleteFilesByExtension -Extensions @(".encrypted", ".decrypted")
+        "|"  
+    }
+    #####################################
     # Gather the initial target directory stats
     targetDirStats
     # Get the finish time
