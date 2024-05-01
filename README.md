@@ -57,19 +57,30 @@ The script will execute in the following order:
 
 # Examples
 
-Basic usage (will prompt for target directory):  
-C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator
+Stage 1 - Encryption  
 
-Specify a target directory:  
-C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test"  
-C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -td "C:\User\User01\Desktop\Test"  
+Method 1 - Non-Destructive - Creates a copy of each file with a .Encrypted extension:  
+C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action Encrypt  
 
-Fully loaded encrypt:  
-C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action "encrypt" -AesKey "cm9id2lsbGlzaW5mb2tleQ==" -AesIv "cm9id2lsbGlzaW5mb3xpdg==" -DeleteOriginal -LogLimit 5 -Unattended
+Method 2 - Destructive - Creates a copy of each file with a .Encrypted extension and deletes the original file:  
+C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action Encrypt -DeleteOriginal  
 
-Fully loaded decrypt:  
-C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action "decrypt" -AesKey "cm9id2lsbGlzaW5mb2tleQ==" -AesIv "cm9id2lsbGlzaW5mb3xpdg==" -LogLimit 5 -Unattended
+Note: If no key/iv is specified, a pair will be dynamically generated at run time and output to the console and log file  
 
-Cleanup:
-C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action "cleanup"
+
+Stage 2 - Decryption  
+
+Non-Destructive - Creates a decrypted copy of all files with the .Encrypted extension:  
+C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action Decrypt -AesKey "Y1NxMHJ0bk13dTJUM2dhQQ==" -AesIv "cTFmYkNlNVE3WG85SERsTw=="  
+
+
+Stage 3 - Restore  
+
+Destructive - Restore all the decrypted files to their original filename/extension (removing the .decrypted):  
+C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action Restore  
+
+Stage 4 - Cleanup  
+
+Delete all left over .Encrypted and/or .Decrypted files:  
+C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action Cleanup  
 
