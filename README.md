@@ -22,7 +22,7 @@ The following parameters are supported:
 -TargetDir (-td) - The directory containing the files to be encrypted/decrypted  
 -Action (-a) - "Encrypt", "decrypt", or "cleanup", default = encrypt 
 -AesKey (-k) - The AES key to be used to encrypt the files, 16 bytes converted to b64, default = dynamically generated at runtime 
--AesIv (-i) - The initialization vector (IV) to be used for the AES encryption, 16 bytes converted to b64, default = dynamically generated at runtime 
+-AesIv (-i) - The initialization vector (IV) to be used for the AES encryption, 16 bytes converted to b64, default = dynamically generated at runtime  
 -DeleteOriginal - Destructive mode, will delete all of the original files after encryption  
 -DisableLog - Disable the log file  
 -LogLimit - Remove any old logs, keeping only the X most recent, default = 0/No limit  
