@@ -19,6 +19,7 @@ malware to hopefully avoid interference from security controls.
 Invoke-EncryptionSimulator has the following capabilities:
 Recursively encrypt or decrypt the contents of a specified folder (AES)
 Optionally delete the original file(s) after encryption
+Optionally restore decrypted files to the original names
 Optionally cleanup old encrypted/decrypted files
 Built-in logging
 
@@ -27,8 +28,8 @@ in a stand alone fashion.
 
 The following parameters are supported:
 -TargetDir (-td) - The directory containing the files to be encrypted/decrypted
--Action (-a) - "Encrypt", "decrypt", or "cleanup", default = encrypt
--AesKey (-k) - The AES key to be used to encrypt the files, 16 bytes converted to b64, default = dynamically generated at runtime
+-Action (-a) - "Encrypt", "Decrypt", "Restore", or "Cleanup", default = Encrypt
+-AesKey (-k) - The AES-256 key to be used to encrypt the files, 32 bytes converted to b64, default = dynamically generated at runtime
 -AesIv (-i) - The initialization vector (IV) to be used for the AES encryption, 16 bytes converted to b64, default = dynamically generated at runtime
 -DeleteOriginal - Destructive mode, will delete all of the original files after encryption
 -DisableLog - Disable the log file
@@ -54,26 +55,38 @@ The script will execute in the following order:
   - If the filename contains "encrypt" and not "decrypt and the action is decrypt - Decrypt the file
   - If the filename does not contain "encrypt" and does not contain "decrypt" and the action is encrypt - Encrypt the file
     - If the DeleteOriginal switch was specified, delete the original file
-  - If the action is cleanup, delete all the files ending with either .encrypted or .decrypted
+  - If the action is restore, remove the ".encrypted.decrypted" extension, restoring all files to the original name
+  - If the action is cleanup, delete all the files ending with either .encrypted or .decrypted extensions
 - Wrap up, stop logging
 
 .EXAMPLE
 
-Basic usage (will prompt for target directory):
-C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator
+Stage 1 - Encryption
 
-Specify a target directory:
-C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test"
-C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -td "C:\User\User01\Desktop\Test"
+Method 1 - Non-Destructive - Creates a copy of each file with a .Encrypted extension:
+C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action Encrypt
 
-Fully loaded encrypt:
-C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action "encrypt" -AesKey "cm9id2lsbGlzaW5mb2tleQ==" -AesIv "cm9id2lsbGlzaW5mb3xpdg==" -DeleteOriginal -LogLimit 5 -Unattended
+Method 2 - Destructive - Creates a copy of each file with a .Encrypted extension and deletes the original file:
+C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action Encrypt -DeleteOriginal
 
-Fully loaded decrypt:
-C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action "decrypt" -AesKey "cm9id2lsbGlzaW5mb2tleQ==" -AesIv "cm9id2lsbGlzaW5mb3xpdg==" -LogLimit 5 -Unattended
+Note: If no key/iv is specified, a pair will be dynamically generated at run time and output to the console and log file
 
-Cleanup:
-C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action "cleanup"
+
+Stage 2 - Decryption
+
+Non-Destructive - Creates a decrypted copy of all files with the .Encrypted extension:
+C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action Decrypt -AesKey "Y1NxMHJ0bk13dTJUM2dhQQ==" -AesIv "cTFmYkNlNVE3WG85SERsTw=="
+
+
+Stage 3 - Restore
+
+Destructive - Restore all the decrypted files to their original filename/extension (removing the .decrypted),:
+C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action Restore
+
+Stage 4 - Cleanup
+
+Delete all left over .Encrypted and/or .Decrypted files:
+C:\PS> Import-Module .\Invoke-EncryptionSimulator.ps1; Invoke-EncryptionSimulator -targetDir "C:\User\User01\Desktop\Test" -Action Cleanup
 
 #>
 
@@ -102,13 +115,32 @@ function b64-encode($string) {
     $b64String
 }
 
+function RestoreFiles {
+    Get-ChildItem -Path $targetDir -File -Recurse | ForEach-Object {
+        if ($_ -match "`.encrypted`.decrypted" -And $action -match "restore") {
+            Try {
+                    $restoreName = $_ -replace ".encrypted.decrypted",""
+                    $restoreFullPath = $_.FullName -replace ".encrypted.decrypted",""
+                    "| $action - $_ `> " + $restoreName
+                    Move-Item -Path $_.FullName -Destination $restoreFullPath -Force
+                    "|"
+                } Catch {
+                    "| Something went wrong!"
+                    "| Error message: $_"
+                    "|"
+                }
+        }
+    }
+}
+
 function DeleteFilesByExtension($extensions) {
     foreach ($Extension in $Extensions) {
         $FilesToDelete = Get-ChildItem -Path $targetDir -Filter "*$Extension" -Recurse
         
         foreach ($File in $FilesToDelete) {
-            Write-Host "| Deleting - $($File.FullName)"
+            Write-Host "| Deleting - $File"
             Remove-Item -Path $File.FullName -Force
+            "|"
         }
     }
 }
@@ -265,7 +297,7 @@ function Invoke-EncryptionSimulator {
     if ((-Not($aesKey)) -Or (-Not($aesIV))) {
         try {
             "| No key/iv specified, generating random pair..."
-            $randomKey = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 16 | % {[char]$_})
+            $randomKey = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 32 | % {[char]$_})
             $randomIV = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 16 | % {[char]$_})
             $aesKey = b64-encode($randomKey)
             $aesIV = b64-encode($randomIV)
@@ -299,6 +331,7 @@ function Invoke-EncryptionSimulator {
     "| Script running as Admin: $isUserAdmin"
     "| Current working directory: $workingDir"
     "| Log file: $logFile"
+    "| Log limit: $logLimit"
     "|"
     "| Target directory: $targetDir"
     "| Target directory stats: Directories - $dirStatsCount Files - $fileStatsCount"
@@ -357,7 +390,6 @@ function Invoke-EncryptionSimulator {
         exit  
     }
     ""
-    ##########################################
     if (($action -match "encrypt") -Or ($action -match "decrypt")) {
         "+-------------------------------------------------------------------------------------"
         "| Beginning encryption/decryption..."
@@ -380,8 +412,7 @@ function Invoke-EncryptionSimulator {
                 Try {
                     Encrypt-Decrypt-File -InputFilePath $_.FullName -OutputFilePath $outputFilePath -Key $aesKey -IV $aesIv -Action $action -DeleteOriginal $DeleteOriginal
                     "|"
-                }
-                Catch {
+                } Catch {
                     "| Something went wrong!"
                     "| Error message: $_"
                     "|"
@@ -389,22 +420,27 @@ function Invoke-EncryptionSimulator {
             }
         }
     }
+    if ($action -match "restore") {
+        "+-------------------------------------------------------------------------------------"
+        "| Beginning restore..."
+        "+---------------------------------"
+        "|"
+        RestoreFiles
+    }
     if ($action -match "cleanup"){
         "+-------------------------------------------------------------------------------------"
         "| Beginning cleanup..."
         "+---------------------------------"
         "|"  
         DeleteFilesByExtension -Extensions @(".encrypted", ".decrypted")
-        "|"  
     }
-    #####################################
     # Gather the initial target directory stats
     targetDirStats
     # Get the finish time
     time
     "| Script complete!"
     "|"
-    "| Post encryption/decryption stats: Directories - $dirStatsCount Files - $fileStatsCount"
+    "| Post run stats: Directories - $dirStatsCount Files - $fileStatsCount"
     "| Finish time: $time"
     "|"
     "+-------------------------------------------------------------------------------------"
